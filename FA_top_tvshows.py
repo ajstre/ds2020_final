@@ -28,10 +28,6 @@ headers = {
 results = []
 
 def parse_html(html):
-    """
-    Given an HTML fragment (which may contain 30 items),
-    this function extracts the title, score, and user count for each item.
-    """
     soup = BeautifulSoup(html, "lxml")
     #Finding the title for each show
     cards = soup.find_all("div", class_="fa-card")
