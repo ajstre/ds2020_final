@@ -29,6 +29,6 @@ with open("C:/Users/aiden/OneDrive/Documents/ds2020_final/imdb_top_250_tv.csv", 
         aggregate = tv_show.get("aggregateRating", {})
         user_score = aggregate.get("ratingValue", "")
         vote_count = aggregate.get("ratingCount", "")
-        writer.writerow([title, "", user_score, vote_count])
+        writer.writerow([title, user_score, vote_count])
 
 print("CSV generated succesfully")
