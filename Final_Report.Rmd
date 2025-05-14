@@ -23,7 +23,7 @@ FA <- read.csv("FA_TV_Rankings.csv")
 #This makes metacritic fit with the 1-10 rating system other websites use
 metacritic$Score <- metacritic$Score / 10
 ```
-
+My name is Aiden Streicher. I ended up doing this project solo.
 
 My goal for this project is to find the best TV shows of all time according to the community. I was inspired by this photo that has made its way around the internet over the years.
 
@@ -57,7 +57,7 @@ ADDING DATA AFTER:
 
 These websites will have their ratings manually entered for the top 50 shows after the list is created. This is due to a variety of reasons depending on the website.
 
-Rotten Tomatoes (Critic and User), Taste- The main reason why this wasn't included initially is because the sorting on this website is terrible. If you want to find a list of the best TV shows of all time for either critic or users you get a lot of results that are just 100% with a small number of votes. If you try to sort by most popular you just get a lot of new TV shows. Because of this I couldn't find a good list to get reliable data from. I'm still skeptical about including critic score because they give 100% to a LOT of shows, but I decided to leave it in. Taste also has sorting issues where it just shows the most popular new movies. Websites- https://www.rottentomatoes.com/, https://www.taste.io/
+Rotten Tomatoes (Critic and User), Taste- The main reason why this wasn't included initially is because the sorting on this website is terrible. If you want to find a list of the best TV shows of all time for either critic or users you get a lot of results that are just 100% with a small number of votes. If you try to sort by most popular you just get a lot of new TV shows. Because of this I couldn't find a good list to get reliable data from. I'm still skeptical about including critic score because they give 100% to a LOT of shows, but I decided to leave it in. Taste also has sorting issues where it just shows the most popular new shows. Websites- https://www.rottentomatoes.com/, https://www.taste.io/
 
 ReelGood, JustWatch, The Movie DB (TMDB)- These all fall into the same catagory where there was some problem with scraping the data. In the case of TMDB I was able to scrape the first 20 TV shows, but the rest were not avaliable. It also has a very strong anime and recency bias. In the case of JustWatch the JustWatch ratings are hidden in each TV's show page which makes scraping the data very difficult and outside my skill level. ReelGood I also had scraping issues with. Websites- https://www.themoviedb.org/tv/top-rated?language=en-US, https://reelgood.com/tv/curated/trending-picks?filter-sort=8, https://www.justwatch.com/us/guide/best-tv-shows-all-time
 
@@ -135,7 +135,7 @@ head(top_50)
 
 Now we have our initial list. Next I will manually add data for the other websites about these 50 shows.
 
-Interesting Findings:
+Interesting Findings while doing this:
 
 Dekalog has 31,000 ratings on IMDB. Despite this it only has 2,970 on every other website combined, which is the lowest number by far. 
 
@@ -170,11 +170,11 @@ rating_cols <- names(website_data)[!grepl("Users$", names(website_data))]
 rating_cols <- setdiff(rating_cols, "Title")
 user_cols <- names(website_data)[grepl("Users$", names(website_data))]
 
-# Convert columns that aren't title to numeric
+#Convert columns that aren't title to numeric
 website_data <- website_data %>%
-  mutate(across(all_of(rating_cols), ~ parse_number(as.character(.))))
+  mutate(across(all_of(rating_cols), ~ parse_number(na_if(as.character(.), "N/A"))))
 website_data <- website_data %>%
-  mutate(across(all_of(user_cols), ~ parse_number(as.character(.))))
+  mutate(across(all_of(user_cols), ~ parse_number(na_if(as.character(.), "N/A"))))
 
 #Get the avearge rating ignoring user counts
 website_data <- website_data %>%
@@ -279,9 +279,8 @@ head(weighted_score)
 Now we have the data for all 3 of our different methods, along with the initial list of 50. Now I'll visualise it in a varety of different ways. First I want 2 lists, one of each shows rating per method, and one of its placement per method.
 
 ```{r}
-
 #Combine all the scores
-#Inital Rating is the first ratings just using the 3 #sources, the others keep their name from earlier
+#Inital Rating is the first ratings, the others keep their name from earlier
 
 #Overall Rating is the average of the 4 other ratings
 combined_ratings <- average_rating %>%
@@ -297,7 +296,6 @@ combined_ratings <- combined_ratings %>%
   rename(initial_rating = Average_Score) %>%
   arrange(desc(Overall_Rating))
 
-str(combined_ratings)
 head(combined_ratings)
 ```
 ```{r}
@@ -388,4 +386,9 @@ ggplot() +
   )
 ```
 
-This gives us a better snapshot into how thinsg played out and visualizes some outliars. We can see that shows like Bluey and Dekalog outpreformed a lot in the user_rating, likely due to them having a lot more votes, and a higher rating on IMDB than any other website.
+This gives us a better snapshot into how thinsg played out and visualizes some outliars. We can see that shows like Bluey and Dekalog outpreformed a lot in the user_rating, likely due to them having a lot more votes, and a higher rating on IMDB than any other website. Other shows like Death Note, Cowboy Bebop and Blue Eyed Samurai did much better on average_rating and weighted_rating. 
+______________________________________________________
+
+Overall there is no perfect way to rank TV shows. Even this method is flawed, as we are using ratings put onto the internet which means that there might be a bias about what type of people would do that in the first place.
+
+Still there was a large sample size in both users and different websites. I think the list of TV shows put together is high quality and I'm happy with the end result.

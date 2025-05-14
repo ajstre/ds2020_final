@@ -355,6 +355,7 @@ display: none;
 </div>
 
 
+<p>My name is Aiden Streicher. I ended up doing this project solo.</p>
 <p>My goal for this project is to find the best TV shows of all time
 according to the community. I was inspired by this photo that has made
 its way around the internet over the years.</p>
@@ -419,7 +420,7 @@ just get a lot of new TV shows. Because of this I couldn’t find a good
 list to get reliable data from. I’m still skeptical about including
 critic score because they give 100% to a LOT of shows, but I decided to
 leave it in. Taste also has sorting issues where it just shows the most
-popular new movies. Websites- <a href="https://www.rottentomatoes.com/" class="uri">https://www.rottentomatoes.com/</a>, <a href="https://www.taste.io/" class="uri">https://www.taste.io/</a></p>
+popular new shows. Websites- <a href="https://www.rottentomatoes.com/" class="uri">https://www.rottentomatoes.com/</a>, <a href="https://www.taste.io/" class="uri">https://www.taste.io/</a></p>
 <p>ReelGood, JustWatch, The Movie DB (TMDB)- These all fall into the
 same catagory where there was some problem with scraping the data. In
 the case of TMDB I was able to scrape the first 20 TV shows, but the
@@ -525,7 +526,7 @@ head(top_50)</code></pre>
 ## 6          8.80       36690</code></pre>
 <p>Now we have our initial list. Next I will manually add data for the
 other websites about these 50 shows.</p>
-<p>Interesting Findings:</p>
+<p>Interesting Findings while doing this:</p>
 <p>Dekalog has 31,000 ratings on IMDB. Despite this it only has 2,970 on
 every other website combined, which is the lowest number by far.</p>
 <p>Bluey has an average rating of 9.3 on IMDB but 8.0 on all the other
@@ -588,32 +589,13 @@ rating_cols &lt;- names(website_data)[!grepl(&quot;Users$&quot;, names(website_d
 rating_cols &lt;- setdiff(rating_cols, &quot;Title&quot;)
 user_cols &lt;- names(website_data)[grepl(&quot;Users$&quot;, names(website_data))]
 
-# Convert columns that aren&#39;t title to numeric
+#Convert columns that aren&#39;t title to numeric
 website_data &lt;- website_data %&gt;%
-  mutate(across(all_of(rating_cols), ~ parse_number(as.character(.))))</code></pre>
-<pre><code>## Warning: There were 6 warnings in `mutate()`.
-## The first warning was:
-## ℹ In argument: `across(all_of(rating_cols), ~parse_number(as.character(.)))`.
-## Caused by warning:
-## ! 5 parsing failures.
-## row col expected actual
-##   6  -- a number    N/A
-##   9  -- a number    N/A
-##  16  -- a number    N/A
-##  23  -- a number    N/A
-##  47  -- a number    N/A
-## ℹ Run `dplyr::last_dplyr_warnings()` to see the 5 remaining warnings.</code></pre>
-<pre class="r"><code>website_data &lt;- website_data %&gt;%
-  mutate(across(all_of(user_cols), ~ parse_number(as.character(.))))</code></pre>
-<pre><code>## Warning: There were 3 warnings in `mutate()`.
-## The first warning was:
-## ℹ In argument: `across(all_of(user_cols), ~parse_number(as.character(.)))`.
-## Caused by warning:
-## ! 1 parsing failure.
-## row col expected actual
-##   6  -- a number    N/A
-## ℹ Run `dplyr::last_dplyr_warnings()` to see the 2 remaining warnings.</code></pre>
-<pre class="r"><code>#Get the avearge rating ignoring user counts
+  mutate(across(all_of(rating_cols), ~ parse_number(na_if(as.character(.), &quot;N/A&quot;))))
+website_data &lt;- website_data %&gt;%
+  mutate(across(all_of(user_cols), ~ parse_number(na_if(as.character(.), &quot;N/A&quot;))))
+
+#Get the avearge rating ignoring user counts
 website_data &lt;- website_data %&gt;%
   rowwise() %&gt;%
   mutate(average_rating = mean(c_across(all_of(rating_cols)), na.rm = TRUE)) %&gt;%
@@ -740,7 +722,7 @@ the initial list of 50. Now I’ll visualise it in a varety of different
 ways. First I want 2 lists, one of each shows rating per method, and one
 of its placement per method.</p>
 <pre class="r"><code>#Combine all the scores
-#Inital Rating is the first ratings just using the 3 #sources, the others keep their name from earlier
+#Inital Rating is the first ratings, the others keep their name from earlier
 
 #Overall Rating is the average of the 4 other ratings
 combined_ratings &lt;- average_rating %&gt;%
@@ -756,15 +738,7 @@ combined_ratings &lt;- combined_ratings %&gt;%
   rename(initial_rating = Average_Score) %&gt;%
   arrange(desc(Overall_Rating))
 
-str(combined_ratings)</code></pre>
-<pre><code>## tibble [50 × 6] (S3: tbl_df/tbl/data.frame)
-##  $ Title          : chr [1:50] &quot;Breaking Bad&quot; &quot;Planet Earth II&quot; &quot;The Wire&quot; &quot;Band of Brothers&quot; ...
-##  $ initial_rating : num [1:50] 9 9.3 9.07 8.87 9.03 8.67 8.55 8.6 8.7 8.77 ...
-##  $ average_rating : num [1:50] 9.31 9.07 9.22 9.19 9.18 9.18 9.16 9.02 9.01 8.91 ...
-##  $ user_rating    : num [1:50] 9.46 9.33 9.25 9.31 9.13 9.28 9.26 9.27 9.09 9.16 ...
-##  $ weighted_rating: num [1:50] 9.32 9.11 9.23 9.2 9.17 9.17 9.17 9.04 9.04 8.94 ...
-##  $ Overall_Rating : num [1:50] 9.27 9.2 9.19 9.14 9.13 9.07 9.04 8.98 8.96 8.95 ...</code></pre>
-<pre class="r"><code>head(combined_ratings)</code></pre>
+head(combined_ratings)</code></pre>
 <pre><code>## # A tibble: 6 × 6
 ##   Title initial_rating average_rating user_rating weighted_rating Overall_Rating
 ##   &lt;chr&gt;          &lt;dbl&gt;          &lt;dbl&gt;       &lt;dbl&gt;           &lt;dbl&gt;          &lt;dbl&gt;
@@ -2915,7 +2889,17 @@ ggplot() +
 <p>This gives us a better snapshot into how thinsg played out and
 visualizes some outliars. We can see that shows like Bluey and Dekalog
 outpreformed a lot in the user_rating, likely due to them having a lot
-more votes, and a higher rating on IMDB than any other website.</p>
+more votes, and a higher rating on IMDB than any other website. Other
+shows like Death Note, Cowboy Bebop and Blue Eyed Samurai did much
+better on average_rating and weighted_rating.
+______________________________________________________</p>
+<p>Overall there is no perfect way to rank TV shows. Even this method is
+flawed, as we are using ratings put onto the internet which means that
+there might be a bias about what type of people would do that in the
+first place.</p>
+<p>Still there was a large sample size in both users and different
+websites. I think the list of TV shows put together is high quality and
+I’m happy with the end result.</p>
 
 
 
