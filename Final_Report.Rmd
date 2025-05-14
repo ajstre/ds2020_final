@@ -1,0 +1,137 @@
+---
+title: "Final Report"
+output: html_document
+date: "2025-05-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+
+#This makes it so the IMDB vote numbers don't show in scientific notation
+options(scipen=999)
+
+imdb <- read.csv("imdb_top_250_tv.csv")
+metacritic <- read.csv("metacritic_tv_scores.csv")
+FA <- read.csv("FA_TV_Rankings.csv")
+
+#This makes metacritic fit with the 1-10 rating system other websites use
+metacritic$Score <- metacritic$Score / 10
+```
+
+
+My goal for this project is to find the best TV shows of all time according to the community. I was inspired by this photo that has made its way around the internet over the years.
+
+```{r}
+knitr::include_graphics("tv_rankings.png")
+```
+
+There are a lot of good TV shows at the top of the list, but there are also many issues with this rankings. Specifically I want to point out 3 issues I found and hope to improve on with this ranking.
+
+1. It doesn't include any animated TV shows. There are a lot of animated shows that would likely appear in the top 10, but aren't included for some reason. The list is meant to be best TV shows of all time, not best live action TV shows of all time.
+
+2. Some of the sources are poorly defined. In particular the last source seems to be some sort of "IMDB Vote?". This skews the rankings heavily to the top 2 and clearly doesn't belong in a ranking like this.
+
+3. It doesn't take into account how many people voted on each site. If 1,000,000 people use IMDB for TV shows and 100,000 use metacritic user votes for the same thing, they are still weighted equally despite there being a lot less people on one site. I'll get into it later but this is the hardest issue to fix for a variety of reasons.
+
+My goal is to build off this, and make my own list of the best TV shows of all time. 
+
+The first step is gathering data and creating a list. I ended up deciding on a 2 step process to create this list, and broke down the sources into 3 categories. I plan to create an initial list of the top 50 TV shows using some of these sources, and then manually add the data for other sources after to adjust the pre-defined top 50 list. I will also not be using a few of the sources above. I'll explain each source and my reasoning below.
+
+USING FOR INITIAL LIST:
+
+These websites will be used to create the initial top 50 list.
+
+IMDB- This is the best source when it comes to TV shows for a few reasons. It has the most users of any website and includes all types of TV shows. It also has an easy to access list of the top rated TV shows and is very easy to scape. One of my takeaways is that IMDB is the gold standard for data collection when looking at TV shows. I used this list: https://www.imdb.com/chart/toptv/?sort=user_rating%2Cdesc
+
+Film Affinity- This is another website that has a decently sized user base and includes all types of TV shows. My biggest issue was scraping the data as it loaded in TV shows from a server, but once I got it figured out it worked great. I used this list: https://www.filmaffinity.com/us/ranking.php?rn=ranking_fa_series
+
+Metacritic Metascore- This is different from the other 2 enteries I'm using as this provides a critical opinion rather than a user opinion. I think the variety helps, and it was also easy to scrape the data. The biggest problem is that it does not include any anime TV shows (although it does incldue western animated shows) so to account for this for the top 50 list it will look for the average rating of all websites with a score. I used this list: https://www.metacritic.com/browse/tv/?releaseYearMin=1910&releaseYearMax=2025&page=1
+
+ADDING DATA AFTER:
+
+These websites will have their ratings manually entered for the top 50 shows after the list is created. This is due to a variety of reasons depending on the website.
+
+Rotten Tomatoes (Critic and User), Taste- The main reason why this wasn't included initially is because the sorting on this website is terrible. If you want to find a list of the best TV shows of all time for either critic or users you get a lot of results that are just 100% with a small number of votes. If you try to sort by most popular you just get a lot of new TV shows. Because of this I couldn't find a good list to get reliable data from. I'm still skeptical about including critic score because they give 100% to a LOT of shows, but I decided to leave it in. Taste also has sorting issues where it just shows the most popular new movies. Websites- https://www.rottentomatoes.com/, https://www.taste.io/
+
+ReelGood, JustWatch, The Movie DB (TMDB)- These all fall into the same catagory where there was some problem with scraping the data. In the case of TMDB I was able to scrape the first 20 TV shows, but the rest were not avaliable. It also has a very strong anime and recency bias. In the case of JustWatch the JustWatch ratings are hidden in each TV's show page which makes scraping the data very difficult and outside my skill level. ReelGood I also had scraping issues with. Websites- https://www.themoviedb.org/tv/top-rated?language=en-US, https://reelgood.com/tv/curated/trending-picks?filter-sort=8, https://www.justwatch.com/us/guide/best-tv-shows-all-time
+
+NOT USING:
+
+IMDB Votes- I'm not fully sure what this is but based off the ratings it doesn't belong in this dataset. It may have been included to generate clicks on social media.
+
+Other Sources- I considered adding other sources but they all had various problems which made me stick to the ones above. The main one I considered is Letterboxd but they only have some TV shows and not all in their database so they wern't fit for this project.
+
+_____________________________________________________________________________________________________________
+
+Now that we have our sources its time to create the initial list of the top 50 movies of all time!
+
+If there were any scores listed as N/A that could be added I added them and ran it again until we got the most complete valid list possible.
+
+I also made it so the minimum number of votes was 20,000 as a top TV show needs to be at least a little bit popular. This seems like a lot but most TV shows (even less popular ones) passed this bar no problem.
+
+```{r}
+#Make it so each database keeps their scores and votes (if applicable)
+imdb <- imdb %>% rename(Imdb_Score = User.Score, Imdb_Votes = Number.of.Votes)
+FA <- FA %>% rename(FA_Score = Score, FA_Votes = Number_Votes)
+metacritic <- metacritic %>% rename(Metacritic_Score = Score)
+
+#Merge the data
+merged_data <- imdb %>%
+  full_join(FA, by = "Title", relationship = "many-to-many") %>%
+  full_join(metacritic, by = "Title", relationship = "many-to-many")
+
+#We want each TV show to be in at least 2 of the lists (because of metacritics no anime)
+merged_data <- merged_data %>%
+  mutate(score_count = (!is.na(Imdb_Score)) + (!is.na(FA_Score)) + (!is.na(Metacritic_Score))) %>%
+  filter(score_count >= 2)
+
+#Get average score
+merged_data <- merged_data %>%
+  mutate(Average_Score = rowMeans(select(., Imdb_Score, FA_Score, Metacritic_Score), na.rm = TRUE))
+
+#Make the number of votes numeric
+merged_data <- merged_data %>%
+  mutate(
+    # Remove commas and convert to character (in case of factor), then to numeric.
+    Imdb_Votes = as.numeric(gsub(",", "", as.character(Imdb_Votes))),
+    FA_Votes   = as.numeric(gsub(",", "", as.character(FA_Votes)))
+  )
+
+#Get total number of votes
+merged_data <- merged_data %>%
+  mutate(Imdb_Votes = ifelse(is.na(Imdb_Votes), 0, Imdb_Votes),
+         FA_Votes = ifelse(is.na(FA_Votes), 0, FA_Votes),
+         Total_Votes = Imdb_Votes + FA_Votes)
+
+#If there are less then 20,000 votes the TV show is filtered out
+merged_data <- merged_data %>%
+  filter(Total_Votes >= 20000)
+
+#Rank by average score (highest first) and take the top 50 TV shows.
+top_50 <- merged_data %>%
+  arrange(desc(Average_Score)) %>%
+  slice_head(n = 50)
+
+#Replace missing scores in each source with "N/A"
+top_50 <- top_50 %>%
+  mutate(Average_Score = round(Average_Score, 2),
+         Imdb_Score = ifelse(is.na(Imdb_Score), "N/A", as.character(Imdb_Score)),
+         FA_Score = ifelse(is.na(FA_Score), "N/A", as.character(FA_Score)),
+         Metacritic_Score = ifelse(is.na(Metacritic_Score), "N/A", as.character(Metacritic_Score))) %>%
+  select(Title, Imdb_Score, FA_Score, Metacritic_Score, Average_Score, Total_Votes)
+
+write_csv(top_50, "Top_50.csv")
+
+head(top_50)
+```
+
+Now we have our initial list.
+
+
+
+
+
