@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(tidyverse)
 library(dplyr)
+library(readr)
+library(formattable)
 
 #This makes it so the IMDB vote numbers don't show in scientific notation
 options(scipen=999)
@@ -58,6 +60,8 @@ These websites will have their ratings manually entered for the top 50 shows aft
 Rotten Tomatoes (Critic and User), Taste- The main reason why this wasn't included initially is because the sorting on this website is terrible. If you want to find a list of the best TV shows of all time for either critic or users you get a lot of results that are just 100% with a small number of votes. If you try to sort by most popular you just get a lot of new TV shows. Because of this I couldn't find a good list to get reliable data from. I'm still skeptical about including critic score because they give 100% to a LOT of shows, but I decided to leave it in. Taste also has sorting issues where it just shows the most popular new movies. Websites- https://www.rottentomatoes.com/, https://www.taste.io/
 
 ReelGood, JustWatch, The Movie DB (TMDB)- These all fall into the same catagory where there was some problem with scraping the data. In the case of TMDB I was able to scrape the first 20 TV shows, but the rest were not avaliable. It also has a very strong anime and recency bias. In the case of JustWatch the JustWatch ratings are hidden in each TV's show page which makes scraping the data very difficult and outside my skill level. ReelGood I also had scraping issues with. Websites- https://www.themoviedb.org/tv/top-rated?language=en-US, https://reelgood.com/tv/curated/trending-picks?filter-sort=8, https://www.justwatch.com/us/guide/best-tv-shows-all-time
+
+MyAnimeList- This is probably going to be the most controversial addition due to the fact that the website only has eastern animated shows (which will make up about 10-15% of the top 50). The biggest reason for adding it though is because it captures a VERY large amount of people that would otherwise go un-represented. For example the show Hunter x Hunter has ~178k votes from other sources, but has over 1.8 million votes on MAL. Considering there were a few sources that had no anime this felt like a good way to balance it out, although I think there are strong arguments for not adding it as well.
 
 NOT USING:
 
@@ -122,16 +126,266 @@ top_50 <- top_50 %>%
          Imdb_Score = ifelse(is.na(Imdb_Score), "N/A", as.character(Imdb_Score)),
          FA_Score = ifelse(is.na(FA_Score), "N/A", as.character(FA_Score)),
          Metacritic_Score = ifelse(is.na(Metacritic_Score), "N/A", as.character(Metacritic_Score))) %>%
-  select(Title, Imdb_Score, FA_Score, Metacritic_Score, Average_Score, Total_Votes)
+  select(Title, Imdb_Score, Imdb_Votes, FA_Score, FA_Votes, Metacritic_Score, Average_Score, Total_Votes)
 
 write_csv(top_50, "Top_50.csv")
 
 head(top_50)
 ```
 
-Now we have our initial list.
+Now we have our initial list. Next I will manually add data for the other websites about these 50 shows.
+
+Interesting Findings:
+
+Dekalog has 31,000 ratings on IMDB. Despite this it only has 2,970 on every other website combined, which is the lowest number by far. 
+
+Bluey has an average rating of 9.3 on IMDB but 8.0 on all the other websites, one of the biggest discrepancies. 
+
+Severence scored a relatively low 7.9 on Rotten Tomatoes user score, one of its lowest scores given. Despite this it outperformed the average on every other non-core website.
+
+Similarly Steins Gate scored abnormally poorly on both ReelGood and Justwatch, compared to its very high ratings on Rotten Tomatoes and MAL
+
+House of Cards preformed very poorly on Rotten Tomatoes (both user and critic) and Taste, but preformed well on other websites.
+
+Now that this is done we can see how all the websites like the top 50 shows.
+
+```{r}
+website_data <- read.csv("Full_Top50_Data.csv")
+
+head(website_data)
+```
+From this I want to try out 3 different methods of rankings and compare them.
+
+1. Take the average score from each source. The upside is this is straightforward and everything gets included. The downside is the representation is unbalanced. I'll call this the average_rating.
+
+2. Get a "Score" from each website with users (website score * num users), add them up and divide by total number of viewers for that show. The upside is this is the best for general representation. The downside is that not every website reports how many users, and can't be included. I'll call this the user_rating.
+
+3. Try and combine the two ideas by giving more popular websites more weight, while still including every website. This is a very subjective approach as I don't have a formula to determine the weight, but should be a good middle ground. I'll call this the weighted_rating.
+
+First I'll create the first new ranking.
+
+```{r}
+#All the columns with "Users" in it are for counting total votes
+rating_cols <- names(website_data)[!grepl("Users$", names(website_data))]
+rating_cols <- setdiff(rating_cols, "Title")
+user_cols <- names(website_data)[grepl("Users$", names(website_data))]
+
+# Convert columns that aren't title to numeric
+website_data <- website_data %>%
+  mutate(across(all_of(rating_cols), ~ parse_number(as.character(.))))
+website_data <- website_data %>%
+  mutate(across(all_of(user_cols), ~ parse_number(as.character(.))))
+
+#Get the avearge rating ignoring user counts
+website_data <- website_data %>%
+  rowwise() %>%
+  mutate(average_rating = mean(c_across(all_of(rating_cols)), na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(average_rating = round(average_rating, 2))
+
+#Put this information in a new csv
+average_rating <- website_data %>% 
+  select(Title, average_rating) %>%
+  arrange(desc(average_rating))
+
+write_csv(average_rating, "average_rating.csv")
+
+head(average_rating)
+```
+This shifted things up quite a bit, with Planet Earth II moving down and Breaking Bad and Chernobyl moving up.
+
+Next we'll do the same thing but count each users vote.
+
+```{r}
+
+#Every rating column with the number of user vote is in the format "Name" for the website rating
+#and "Name_Users" for the number of votes that tv show got from the website
+
+#This isolates these pairs so we can get a "User score" from each website
+user_cols <- names(website_data)[grepl("_Users$", names(website_data))]
+rating_cols <- sub("_Users$", "", user_cols)
+paired_indices <- rating_cols %in% names(website_data)
+user_cols <- user_cols[paired_indices]
+rating_cols <- rating_cols[paired_indices]
+
+#For each pair we want the number of votes * the rating
+website_data <- website_data %>%
+  rowwise() %>%
+  mutate(
+    #Total number of votes across all websites
+    total_votes = sum(c_across(all_of(user_cols)), na.rm = TRUE),
+    #Sum of the weighted "users" for each website
+    weighted_sum = sum(c_across(all_of(rating_cols)) * c_across(all_of(user_cols)), na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    user_rating = if_else(total_votes > 0, round(weighted_sum / total_votes, 2), NA_real_)
+  )
+
+#Dataset with this user score
+user_rating_csv <- website_data %>%
+  select(Title, user_rating) %>%
+  arrange(desc(user_rating))
+
+write_csv(user_rating_csv, "user_rating.csv")
+
+head(user_rating_csv)
+```
+In this one Breaking Bad remains king while Planet Earth II surges back up. Both The Wire and The Sopranos dropped out of the top 5 while Band of Brothers and Frieren is the first anime to crack it.
+
+Lastly I want to try and do a weighted score. MAL and IMDB both contain by far the most users so their raitings will be 2.5x more important. Taste, Justwatch and FA both have more than the rest, so they will be factored by 1.25x. Lastly tomato critic and metacritic will also be weighted at 1.25x to give a bit more weight to the critics.
+
+All these numbres could obviously be adjusted based on what you think is the right distriubution but lets see how it turns out.
+
+```{r}
+
+#The columns that have ratings
+rating_cols <- c("Tomato_Critic", "Tomato_User", "Taste", "ReelGood", 
+                 "JustWatch", "TMDB", "MAL", "FA", "Imdb", "Metacritic_Score")
+
+#The weight for each rating source
+weights <- c(
+  "Tomato_Critic"    = 1.25,
+  "Tomato_User"      = 1.0,
+  "Taste"            = 1.25,
+  "ReelGood"         = 1.0,
+  "JustWatch"        = 1.25,
+  "TMDB"             = 1.0,
+  "MAL"              = 2.5,
+  "FA"               = 1.25,
+  "Imdb"             = 2.5,
+  "Metacritic_Score" = 1.25
+)
+
+weighted_score <- website_data %>%
+  rowwise() %>%
+  mutate(
+    weighted_sum = sum(c_across(all_of(rating_cols)) * weights[rating_cols], na.rm = TRUE),
+    total_weight = sum(if_else(!is.na(c_across(all_of(rating_cols))), 
+                               weights[rating_cols], 
+                               0), na.rm = TRUE),
+    weighted_rating = if_else(total_weight > 0, round(weighted_sum / total_weight, 2), NA_real_)
+  ) %>%
+  ungroup() %>%
+  arrange(desc(weighted_rating)) %>%
+  select(Title, weighted_rating)
+
+#put this new data in a csv
+write_csv(weighted_score, "weighted_score.csv")
+
+head(weighted_score)
+```
+
+Now we have the data for all 3 of our different methods, along with the initial list of 50. Now I'll visualise it in a varety of different ways. First I want 2 lists, one of each shows rating per method, and one of its placement per method.
+
+```{r}
+
+#Combine all the scores
+#Inital Rating is the first ratings just using the 3 #sources, the others keep their name from earlier
+
+#Overall Rating is the average of the 4 other ratings
+combined_ratings <- average_rating %>%
+  left_join(user_rating_csv, by = "Title") %>%
+  left_join(top_50, by = "Title") %>%
+  left_join(weighted_score, by = "Title") %>%
+  rowwise() %>%
+  mutate(Overall_Rating = round(mean(c(average_rating, user_rating, weighted_rating, Average_Score), na.rm = TRUE), 2)) %>%
+  ungroup() %>%
+  select(Title, Average_Score, average_rating, user_rating, weighted_rating, Overall_Rating)
+
+combined_ratings <- combined_ratings %>%
+  rename(initial_rating = Average_Score) %>%
+  arrange(desc(Overall_Rating))
+
+str(combined_ratings)
+head(combined_ratings)
+```
+```{r}
+#Now this is a list of the 1-50 rankings each show got
+#on each list
+
+placements <- combined_ratings %>%
+  mutate(
+    Rank_Simple   = min_rank(desc(average_rating)),
+    Rank_User     = min_rank(desc(user_rating)),
+    Rank_Weighted = min_rank(desc(weighted_rating)),
+    Rank_Inital   = min_rank(desc(initial_rating))
+  ) %>%
+  # Compute an average rank
+  mutate(Rank_Overall = round((Rank_Simple + Rank_User + Rank_Weighted+Rank_Inital) / 4, 1)) %>%
+  select(Title, Rank_Inital, Rank_Simple, Rank_User, Rank_Weighted, Rank_Overall) %>%
+  arrange(Rank_Overall)
 
 
+head(placements)
+```
+Whats interesting is despite having a lower overall average rating, The Wire and Band of Brothers have a higher average list placement.
 
+Lets make this data look nice. I'm using the formattable package. Green shows higher numbers and red lower numbers.
 
+```{r}
+formattable(combined_ratings, list(
+  initial_rating = color_tile("red", "green"),
+  average_rating = color_tile("red", "green"),
+  user_rating   = color_tile("red", "green"),
+  weighted_rating = color_tile("red", "green"),
+  Overall_Rating = color_tile("red", "green")
+))
+```
 
+We can do the same for the placements, this time lower numbers are better.
+
+```{r}
+formattable(placements, list(
+  Rank_Initial   = color_tile("green", "red"),
+  Rank_Simple   = color_tile("green", "red"),
+  Rank_User     = color_tile("green", "red"),
+  Rank_Weighted = color_tile("green", "red"),
+  Rank_Overall  = color_tile("green", "red")
+))
+```
+
+The last thing I want to do is put the rating data into a bar graph.
+
+```{r myplot, fig.width=60, fig.height=60}
+
+#Make it so the graph is sorted by overall rating
+combined_ratings <- combined_ratings %>%
+  mutate(Title = fct_reorder(Title, Overall_Rating, .desc = FALSE))
+
+#Into long format
+long_ratings <- combined_ratings %>%
+  pivot_longer(
+    cols = c(initial_rating, average_rating, user_rating, weighted_rating, Overall_Rating),
+    names_to = "Method",
+    values_to = "Rating"
+  )
+
+ggplot() +
+#The background bar is the overall rating
+  geom_col(data = filter(long_ratings, Method == "Overall_Rating"),
+           aes(x = Title, y = Rating, group = Title),
+           fill = "lightgrey",
+           width = 0.9) +
+#The bars over it are its individual scores on different methods
+  geom_col(data = filter(long_ratings, Method != "Overall_Rating"),
+           aes(x = Title, y = Rating, fill = Method),
+           position = position_dodge(width = 0.9),
+           width = 0.5) +
+  coord_flip() +  # Horizontal bars
+  labs(title = "Ratings by Method",
+       subtitle = "The background bar is the Overall rating, the other bars are ratings by different methods.",
+       x = "TV Show", 
+       y = "Rating") +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(size = 80, face = "bold"),
+    plot.subtitle = element_text(size = 60),
+    axis.title    = element_text(size = 60),
+    axis.text     = element_text(size = 45),
+    legend.title  = element_text(size = 60),
+    legend.text   = element_text(size = 48)
+  )
+```
+
+This gives us a better snapshot into how thinsg played out and visualizes some outliars. We can see that shows like Bluey and Dekalog outpreformed a lot in the user_rating, likely due to them having a lot more votes, and a higher rating on IMDB than any other website.
