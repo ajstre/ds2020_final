@@ -388,7 +388,7 @@ ggplot() +
 ```
 
 This gives us a better snapshot into how thinsg played out and visualizes some outliars. We can see that shows like Bluey and Dekalog outpreformed a lot in the user_rating, likely due to them having a lot more votes, and a higher rating on IMDB than any other website. Other shows like Death Note, Cowboy Bebop and Blue Eyed Samurai did much better on average_rating and weighted_rating. 
-______________________________________________________
+____________________________________________________________________________________________________
 
 Overall there is no perfect way to rank TV shows. Even this method is flawed, as we are using ratings put onto the internet which means that there might be a bias about what type of people would do that in the first place.
 
